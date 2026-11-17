@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MapPe — Sign in</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <style>
+    :root {
+      --ink: #14202E;
+      --ink-soft: #33465A;
+      --line: #E2E8EF;
+      --canvas: #F5F7FA;
+      --surface: #FFFFFF;
+      --primary: #2C5C8A;
+      --primary-soft: #E8F0F7;
+      --primary-deep: #1F4568;
+      --sev-low: #E8A33D;
+      --sev-medium: #C1502E;
+      --sev-high: #7A1F2B;
+      --font-display: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+      --font-body: "Inter", system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--ink);
+      color: #fff;
+      font-family: var(--font-body);
+    }
+
+    body {
+      overflow-x: hidden;
+    }
+
+    /* ---------- scrollytelling stack: sticky map + flowing steps share one grid cell ---------- */
+    .story {
+      display: grid;
+    }
+
+    .story>* {
+      grid-area: 1/1;
+    }
+
+    .map-sticky {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      width: 100%;
+      overflow: hidden;
+      background: var(--ink);
+      user-select: none;
+    }
+
+    #map-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #camera {
+      transition: transform 1.1s cubic-bezier(.22, .61, .2, 1);
+    }
+
+    #camera.dragging {
+      transition: none;
+    }
+
+    .map-sticky {
+      cursor: grab;
+      touch-action: pan-y;
+    }
+
+    .map-sticky.dragging {
+      cursor: grabbing;
+    }
+
+    .map-sticky.touch-explore {
+      touch-action: none;
+    }
+
+    .story-nav {
+      position: fixed;
+      top: 20px;
+      right: 24px;
+      z-index: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .story-nav button {
+      pointer-events: auto;
+      font: 600 13px var(--font-body);
+      cursor: pointer;
+      border-radius: 999px;
+      padding: 10px 15px;
+      color: #fff;
+      background: rgba(20, 32, 46, .75);
+      border: 1px solid rgba(255, 255, 255, .35);
+      backdrop-filter: blur(10px);
+    }
+
+    .story-nav button:hover,
+    .story-nav button:focus-visible {
+      background: var(--primary-deep);
+      outline-offset: 3px;
+    }
+
+    .story-nav .sign-in-link {
+      background: #fff;
+      color: var(--ink);
+      border-color: #fff;
+    }
+
+    .story-nav .sign-in-link:hover {
+      background: var(--primary-soft);
+      color: var(--ink);
+    }
+
+    .map-hint {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 410;
+      pointer-events: none;
+      font-size: 11.5px;
+      color: rgba(255, 255, 255, .7);
+      background: rgba(20, 32, 46, .65);
+      padding: 8px 12px;
+      border-radius: 99px;
+      white-space: nowrap;
+    }
+
+    .touch-map-toggle {
+      display: none;
+    }
+
+    .map-veil {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 400;
+      background: linear-gradient(180deg, rgba(20, 32, 46, .72) 0%, rgba(20, 32, 46, .22) 26%, rgba(20, 32, 46, .22) 74%, rgba(20, 32, 46, .82) 100%);
+      transition: background 900ms ease;
+    }
+
+    .map-veil.deep {
+      background: linear-gradient(180deg, rgba(20, 32, 46, .9) 0%, rgba(20, 32, 46, .68) 45%, rgba(20, 32, 46, .94) 100%);
+    }
+
+    .map-chrome {
+      position: absolute;
+      z-index: 410;
+      font-family: var(--font-body);
+      pointer-events: none;
+    }
+
+    .map-chrome.corner-tl {
+      top: 26px;
+      left: 28px;
+      font-size: 11.5px;
+      letter-spacing: .06em;
+      color: rgba(255, 255, 255, .42);
+    }
+
+    .map-chrome.corner-tl b {
+      color: rgba(255, 255, 255, .72);
+      font-weight: 600;
+    }
+
+    .map-chrome.corner-br {
+      bottom: 26px;
+      right: 28px;
+      font-size: 11px;
+      color: rgba(255, 255, 255, .35);
+      text-align: right;
+      line-height: 1.6;
+    }
+
+    .map-chrome.corner-tr {
+      top: 26px;
+      right: 28px;
+    }
+
+    .map-chrome.corner-bl {
+      bottom: 26px;
+      left: 28px;
+      font-size: 11px;
+      color: rgba(255, 255, 255, .4);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .scale-bar {
+      width: 46px;
+      height: 0;
+      border-top: 2px solid rgba(255, 255, 255, .4);
+      position: relative;
+    }
+
+    .scale-bar::before,
+    .scale-bar::after {
+      content: "";
+      position: absolute;
+      top: -4px;
+      width: 1px;
+      height: 8px;
+      background: rgba(255, 255, 255, .4);
+    }
+
+    .scale-bar::before {
+      left: 0;
+    }
+
+    .scale-bar::after {
+      right: 0;
+    }
+
+    .steps {
+      position: relative;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .step {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 8vh 8vw;
+    }
+
+    .step>* {
+      pointer-events: auto;
+    }
+
+    /* ---------- hero ---------- */
+    .eyebrow-mark {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 700ms ease, transform 700ms ease;
+    }
+
+    .step.active .eyebrow-mark {
+      opacity: 1;
+      transform: none;
+    }
+
+    .eyebrow-mark .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--sev-medium);
+      box-shadow: 0 0 0 0 rgba(193, 80, 46, .6);
+      animation: markPulse 2.2s ease-in-out infinite;
+    }
+
+    @keyframes markPulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(193, 80, 46, .55);
+      }
+
+      70% {
+        box-shadow: 0 0 0 10px rgba(193, 80, 46, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(193, 80, 46, 0);
+      }
+    }
+
+    .eyebrow-mark span {
+      font-size: 13px;
+      color: rgba(255, 255, 255, .65);
+      letter-spacing: .01em;
+    }
+
+    .hero h1 {
+      font: 800 clamp(38px, 6vw, 74px)/1.05 var(--font-display);
+      max-width: 14ch;
+      margin: 0 0 20px;
+      letter-spacing: -.02em;
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity 800ms ease 80ms, transform 800ms ease 80ms;
+    }
+
+    .step.active.hero h1 {
+      opacity: 1;
+      transform: none;
+    }
+
+    .hero p.lede {
+      font-size: clamp(16px, 2vw, 20px);
+      line-height: 1.6;
+      max-width: 38ch;
+      color: rgba(255, 255, 255, .8);
+      margin: 0;
+      opacity: 0;
+      transform: translateY(14px);
+      transition: opacity 800ms ease 220ms, transform 800ms ease 220ms;
+    }
+
+    .step.active.hero p.lede {
+      opacity: 1;
+      transform: none;
+    }
+
+    .scroll-cue {
+      margin-top: 48px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12.5px;
+      color: rgba(255, 255, 255, .55);
+      opacity: 0;
+      transition: opacity 800ms ease 400ms;
+    }
+
+    .step.active.hero .scroll-cue {
+      opacity: 1;
+    }
+
+    .scroll-cue svg {
+      animation: cueBob 1.8s ease-in-out infinite;
+    }
+
+    @keyframes cueBob {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(6px);
+      }
+    }
+
+    /* ---------- alert steps ---------- */
+    .alert-card {
+      max-width: 420px;
+      background: rgba(20, 32, 46, .82);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, .12);
+      border-radius: 14px;
+      padding: 26px 26px 24px;
+      opacity: 0;
+      transform: translateY(22px);
+      transition: opacity 700ms ease, transform 700ms ease;
+    }
+
+    .step.active .alert-card {
+      opacity: 1;
+      transform: none;
+    }
+
+    .alert-card.low {
+      border-left: 3px solid var(--sev-low);
+    }
+
+    .alert-card.medium {
+      border-left: 3px solid var(--sev-medium);
+    }
+
+    .alert-card.high {
+      border-left: 3px solid var(--sev-high);
+    }
+
+    .alert-kicker {
+      font-size: 12.5px;
+      color: rgba(255, 255, 255, .55);
+      margin-bottom: 8px;
+    }
+
+    .alert-title {
+      font: 700 26px/1.25 var(--font-display);
+      margin: 0 0 10px;
+      letter-spacing: -.01em;
+    }
+
+    .alert-title.low {
+      color: var(--sev-low);
+    }
+
+    .alert-title.medium {
+      color: #E8825F;
+    }
+
+    .alert-title.high {
+      color: #E8825F;
+    }
+
+    .alert-body {
+      font-size: 14.5px;
+      line-height: 1.65;
+      color: rgba(255, 255, 255, .78);
+      margin: 0;
+    }
+
+    .alert-foot {
+      margin-top: 14px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, .4);
+    }
+
+    .align-right {
+      align-items: flex-end;
+      text-align: right;
+    }
+
+    .align-right .alert-card {
+      text-align: left;
+    }
+
+    /* ---------- reveal (final map beat before login) ---------- */
+    .reveal h2 {
+      font: 700 clamp(28px, 4vw, 44px)/1.2 var(--font-display);
+      max-width: 18ch;
+      margin: 0 0 16px;
+      letter-spacing: -.01em;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 800ms ease, transform 800ms ease;
+    }
+
+    .step.active.reveal h2 {
+      opacity: 1;
+      transform: none;
+    }
+
+    .reveal p {
+      max-width: 40ch;
+      font-size: 15.5px;
+      line-height: 1.7;
+      color: rgba(255, 255, 255, .72);
+      margin: 0;
+      opacity: 0;
+      transform: translateY(14px);
+      transition: opacity 800ms ease 150ms, transform 800ms ease 150ms;
+    }
+
+    .step.active.reveal p {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* ---------- login ---------- */
+    .login-step {
+      align-items: center;
+      padding-top: 70px;
+      padding-bottom: 30px;
+    }
+
+    .login-card {
+      width: min(370px, 92vw);
+      background: var(--surface);
+      color: var(--ink);
+      border-radius: 16px;
+      padding: 22px 24px 20px;
+      box-shadow: 0 25px 70px rgba(0, 0, 0, .4);
+      max-height: calc(100vh - 92px);
+      overflow: auto;
+      opacity: 0;
+      transform: translateY(26px) scale(.98);
+      transition: opacity 700ms ease, transform 700ms ease;
+    }
+
+    .auth-visible .map-hint {
+      display: none;
+    }
+
+    .step.active .login-card {
+      opacity: 1;
+      transform: none;
+    }
+
+    .login-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      background: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .login-card h2 {
+      font: 700 19px/1.25 var(--font-display);
+      margin: 0 0 3px;
+      letter-spacing: -.01em;
+    }
+
+    .login-card .sub {
+      font-size: 12.5px;
+      color: var(--ink-soft);
+      margin: 0 0 13px;
+      line-height: 1.4;
+    }
+
+    .field {
+      margin-bottom: 10px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--ink-soft);
+      margin-bottom: 6px;
+    }
+
+    .field input {
+      width: 100%;
+      padding: 9px 11px;
+      font-size: 14px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: var(--font-body);
+    }
+
+    .field input:focus {
+      outline: 2px solid var(--primary);
+      outline-offset: 1px;
+      border-color: var(--primary);
+      background: #fff;
+    }
+
+    .login-btn {
+      width: 100%;
+      margin-top: 3px;
+      padding: 10px;
+      border: none;
+      border-radius: 9px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font-body);
+      cursor: pointer;
+      transition: background 150ms ease;
+    }
+
+    .login-btn:hover {
+      background: var(--primary-deep);
+    }
+
+    .login-foot {
+      margin: 10px 0 0;
+      font-size: 12px;
+      color: var(--ink-soft);
+      text-align: center;
+    }
+
+    .login-foot a {
+      color: var(--primary);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .login-note {
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: var(--canvas);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--ink-soft);
+    }
+
+    .form-status {
+      font-size: 12px;
+      color: var(--sev-high);
+      margin: 0;
+      line-height: 1.4;
+    }
+
+    .form-status:empty {
+      display: none;
+    }
+
+    .auth-tabs {
+      display: flex;
+      gap: 6px;
+      background: var(--canvas);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 3px;
+      margin-bottom: 12px;
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 7px;
+      border: none;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--ink-soft);
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 150ms ease, color 150ms ease;
+    }
+
+    .auth-tab.active {
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 1px 3px rgba(20, 32, 46, .12);
+    }
+
+    .google-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 150ms ease, border-color 150ms ease;
+    }
+
+    .google-btn:hover {
+      background: var(--canvas);
+      border-color: #c7d2dd;
+    }
+
+    .auth-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 11px 0;
+      font-size: 11px;
+      color: var(--ink-soft);
+    }
+
+    .auth-divider::before,
+    .auth-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--line);
+    }
+
+    /* ---------- auth modal: the card now opens in place instead of scroll-centering ---------- */
+    .auth-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 900;
+      display: flex;
+      padding: 24px 18px;
+      overflow-y: auto;
+      background: rgba(9, 15, 23, .72);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      opacity: 0;
+      transition: opacity 200ms ease;
+    }
+
+    .auth-overlay[hidden] {
+      display: none;
+    }
+
+    .auth-overlay.open {
+      opacity: 1;
+    }
+
+    /* the card inside the modal is always painted; only the dialog animates */
+    .auth-overlay .login-card {
+      position: relative;
+      margin: auto;
+      opacity: 1;
+      max-height: none;
+      overflow: visible;
+      transform: translateY(14px) scale(.985);
+      transition: transform 240ms cubic-bezier(.2, .8, .25, 1);
+    }
+
+    .auth-overlay.open .login-card {
+      transform: none;
+    }
+
+    .auth-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink-soft);
+      cursor: pointer;
+      line-height: 1;
+      transition: background 150ms ease, color 150ms ease;
+    }
+
+    .auth-close:hover {
+      background: var(--canvas);
+      color: var(--ink);
+    }
+
+    .auth-mode-note {
+      margin: 0 0 12px;
+      padding: 7px 9px;
+      border-radius: 8px;
+      background: var(--primary-soft);
+      border: 1px solid #cfe0ee;
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--primary-deep);
+    }
+
+    .auth-mode-note[hidden] {
+      display: none;
+    }
+
+    /* closing scene now holds call-to-action buttons, not the form itself */
+    .login-cta {
+      width: min(430px, 92vw);
+      opacity: 0;
+      transform: translateY(22px);
+      transition: opacity 600ms ease, transform 600ms ease;
+    }
+
+    .step.active .login-cta {
+      opacity: 1;
+      transform: none;
+    }
+
+    .login-cta h2 {
+      font: 800 clamp(26px, 4vw, 38px)/1.15 var(--font-display);
+      margin: 0 0 10px;
+      letter-spacing: -.02em;
+    }
+
+    .login-cta p {
+      margin: 0 0 20px;
+      font-size: 15px;
+      line-height: 1.55;
+      color: rgba(255, 255, 255, .78);
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .cta-primary,
+    .cta-secondary {
+      font: 600 14px var(--font-body);
+      padding: 12px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 150ms ease, border-color 150ms ease;
+    }
+
+    .cta-primary {
+      border: none;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .cta-primary:hover {
+      background: var(--primary-soft);
+    }
+
+    .cta-secondary {
+      background: transparent;
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, .4);
+    }
+
+    .cta-secondary:hover {
+      background: rgba(255, 255, 255, .12);
+    }
+
+    .cta-guest {
+      margin: 16px 0 0;
+      font-size: 13px;
+      color: rgba(255, 255, 255, .7);
+    }
+
+    .cta-guest a {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .signed-in-banner {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .1);
+      border: 1px solid rgba(255, 255, 255, .22);
+    }
+
+    .signed-in-banner[hidden] {
+      display: none;
+    }
+
+    .signed-in-banner p {
+      margin: 0 0 12px;
+      font-size: 13.5px;
+      color: rgba(255, 255, 255, .85);
+    }
+
+    body.auth-open {
+      overflow: hidden;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+      .auth-overlay,
+      .auth-overlay .login-card,
+      .login-cta {
+        transition: none;
+      }
+    }
+
+    /* ---------- hardcoded map ---------- */
+    .node-label {
+      font-family: var(--font-body);
+      font-size: 17px;
+      font-weight: 600;
+      fill: rgba(255, 255, 255, .58);
+      letter-spacing: .01em;
+      transition: fill 500ms ease;
+    }
+
+    .node-label.hub {
+      fill: rgba(255, 255, 255, .85);
+    }
+
+    .node-label.armed {
+      fill: #fff;
+    }
+
+    .node-dot {
+      transition: r 500ms ease, fill 500ms ease;
+    }
+
+    .node-ring {
+      fill: none;
+      stroke-width: 1;
+      opacity: .5;
+    }
+
+    .map-point.secondary .node-label {
+      font-size: 14px;
+      font-weight: 500;
+      fill: rgba(255, 255, 255, .46);
+    }
+
+    .map-point.secondary .node-dot {
+      fill: #91A7BA;
+      opacity: .72;
+    }
+
+    .map-corridor {
+      fill: none;
+      stroke: #5E86AC;
+      stroke-opacity: .3;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .map-corridor.minor {
+      stroke-opacity: .2;
+      stroke-width: 1.25;
+      stroke-dasharray: 3 9;
+    }
+
+    .pulse-ring {
+      fill: none;
+      stroke-width: 2;
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: svgPing 1.9s cubic-bezier(0, 0, .2, 1) infinite;
+    }
+
+    @keyframes svgPing {
+      0% {
+        transform: scale(.5);
+        opacity: .65;
+      }
+
+      75% {
+        transform: scale(2.4);
+        opacity: 0;
+      }
+
+      100% {
+        transform: scale(2.4);
+        opacity: 0;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+      *,
+      *::before,
+      *::after {
+        transition-duration: .001ms !important;
+        animation-duration: .001ms !important;
+      }
+    }
+
+    @media (max-width:640px) {
+      .step {
+        padding: 8vh 6vw;
+      }
+
+      .align-right {
+        align-items: flex-start;
+        text-align: left;
+      }
+
+      .align-right .alert-card {
+        text-align: left;
+      }
+
+      .map-chrome.corner-br {
+        display: none;
+      }
+
+      .map-chrome.corner-tl {
+        top: 72px;
+        left: 6vw;
+      }
+
+      .map-hint {
+        display: none;
+      }
+
+      .touch-map-toggle {
+        display: block;
+      }
+
+      .reset-map {
+        display: none;
+      }
+
+      .story-nav {
+        top: 14px;
+        right: 5vw;
+        gap: 6px;
+      }
+
+      .story-nav button {
+        padding: 9px 11px;
+        font-size: 12px;
+      }
+
+      .login-step {
+        padding-top: 65px;
+        padding-bottom: 20px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav class="story-nav" aria-label="Quick actions">
+    <button type="button" class="touch-map-toggle" id="touch-map-toggle" aria-pressed="false">Explore map</button>
+    <button type="button" class="reset-map" id="reset-map">Reset map</button>
+    <button type="button" class="sign-in-link" id="skip-to-login">Sign in</button>
+  </nav>
+  <div class="map-hint" aria-hidden="true">Hold and drag · 19 mapped points</div>
+  <div class="story">
+
+    <div class="map-sticky">
+      <svg id="map-svg" viewBox="0 0 1400 1080" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <radialGradient id="glow" cx="50%" cy="42%" r="65%">
+            <stop offset="0%" stop-color="#2C5C8A" stop-opacity=".35" />
+            <stop offset="100%" stop-color="#14202E" stop-opacity="0" />
+          </radialGradient>
+          <pattern id="grid" width="46" height="46" patternUnits="userSpaceOnUse">
+            <path d="M46 0H0V46" fill="none" stroke="#ffffff" stroke-opacity=".05" stroke-width="1" />
+          </pattern>
+        </defs>
+
+        <rect x="-600" y="-600" width="2600" height="2600" fill="var(--ink)" />
+        <rect x="-600" y="-600" width="2600" height="2600" fill="url(#grid)" />
+
+        <g id="camera">
+          <ellipse cx="700" cy="430" rx="900" ry="700" fill="url(#glow)" />
+
+          <!-- outskirts ring: sense of the wider metro area -->
+          <ellipse cx="680" cy="450" rx="700" ry="540" fill="none" stroke="#ffffff" stroke-opacity=".08"
+            stroke-width="1.5" stroke-dasharray="2 10" />
+          <ellipse cx="700" cy="440" rx="440" ry="340" fill="none" stroke="#ffffff" stroke-opacity=".05"
+            stroke-width="1" stroke-dasharray="2 10" />
+
+          <!-- Khan River: runs roughly north-south through the city -->
+          <path d="M980,0 C900,160 940,260 850,360 C760,460 660,560 590,760 C555,860 520,960 480,1080" fill="none"
+            stroke="#3E7CA6" stroke-opacity=".38" stroke-width="3.5" stroke-linecap="round" />
+
+          <!-- neighborhood zone blobs: gives each area footprint, not just a point -->
+          <g fill="#2C5C8A" stroke="#5E86AC">
+            <ellipse cx="700" cy="420" rx="120" ry="92" fill-opacity=".07" stroke-opacity=".16" stroke-width="1" />
+            <ellipse cx="1180" cy="140" rx="100" ry="76" fill-opacity=".06" stroke-opacity=".14" stroke-width="1" />
+            <ellipse cx="1000" cy="330" rx="92" ry="70" fill-opacity=".06" stroke-opacity=".14" stroke-width="1" />
+            <ellipse cx="820" cy="430" rx="78" ry="60" fill-opacity=".06" stroke-opacity=".14" stroke-width="1" />
+            <ellipse cx="860" cy="640" rx="100" ry="76" fill-opacity=".06" stroke-opacity=".14" stroke-width="1" />
+            <ellipse cx="600" cy="710" rx="104" ry="80" fill-opacity=".06" stroke-opacity=".14" stroke-width="1" />
+            <ellipse cx="90" cy="980" rx="128" ry="98" fill-opacity=".06" stroke-opacity=".14" stroke-width="1" />
+          </g>
+
+          <!-- city-core building texture: small block footprints around the dense center -->
+          <g fill="#ffffff" fill-opacity=".055">
+            <rect x="660" y="360" width="16" height="12" />
+            <rect x="686" y="354" width="12" height="18" />
+            <rect x="710" y="368" width="18" height="12" />
+            <rect x="670" y="392" width="12" height="16" />
+            <rect x="716" y="404" width="16" height="12" />
+            <rect x="740" y="386" width="12" height="12" />
+            <rect x="620" y="350" width="14" height="18" />
+            <rect x="600" y="378" width="18" height="12" />
+            <rect x="580" y="358" width="12" height="16" />
+            <rect x="750" y="410" width="16" height="12" />
+            <rect x="770" y="420" width="12" height="16" />
+            <rect x="700" y="440" width="14" height="12" />
+          </g>
+
+          <!-- scattered locality texture across the wider map, so the fringes don't read empty -->
+          <g fill="#ffffff" fill-opacity=".14">
+            <circle cx="380" cy="260" r="2.5" />
+            <circle cx="500" cy="190" r="2" />
+            <circle cx="620" cy="130" r="2.5" />
+            <circle cx="420" cy="460" r="2" />
+            <circle cx="520" cy="580" r="2.5" />
+            <circle cx="330" cy="620" r="2" />
+            <circle cx="700" cy="620" r="2.5" />
+            <circle cx="780" cy="720" r="2" />
+            <circle cx="960" cy="620" r="2.5" />
+            <circle cx="1240" cy="320" r="2" />
+            <circle cx="1290" cy="220" r="2.5" />
+            <circle cx="1300" cy="440" r="2" />
+            <circle cx="200" cy="620" r="2.5" />
+            <circle cx="160" cy="760" r="2" />
+            <circle cx="300" cy="900" r="2.5" />
+            <circle cx="1080" cy="480" r="2" />
+            <circle cx="980" cy="560" r="2.5" />
+            <circle cx="880" cy="220" r="2" />
+            <circle cx="440" cy="820" r="2.5" />
+            <circle cx="1150" cy="360" r="2" />
+          </g>
+
+          <!-- Coordinate-projected locations and connecting corridors are rendered by JavaScript. -->
+          <g id="network-lines"></g>
+          <g id="map-points"></g>
+          <g id="alert-marks"></g>
+        </g>
+      </svg>
+
+      <div class="map-veil" id="veil"></div>
+      <div class="map-chrome corner-tl">INDORE &amp; SURROUNDINGS · <b>demo workspace</b></div>
+      <div class="map-chrome corner-br">MapPe<br>relative positions from mapped coordinates
+      </div>
+      <div class="map-chrome corner-tr">
+        <svg width="34" height="34" viewBox="0 0 34 34">
+          <circle cx="17" cy="17" r="15" fill="none" stroke="#ffffff" stroke-opacity=".3" />
+          <path d="M17 4 L21 17 L17 30 L13 17 Z" fill="#ffffff" fill-opacity=".45" /><text x="17" y="0" font-size="9"
+            fill="#ffffff" fill-opacity=".5" text-anchor="middle">N</text>
+        </svg>
+      </div>
+      <div class="map-chrome corner-bl">
+        <div class="scale-bar"></div>
+        <span>≈ 18 km across</span>
+      </div>
+    </div>
+
+    <div class="steps">
+
+      <section class="step hero" data-step="hero">
+        <div class="eyebrow-mark"><span class="dot"></span><span>AI · Geospatial Analytics · Safer Route Insights</span>
+        </div>
+        <h1>Know the city before you move through it.</h1>
+        <p class="lede">MapPe turns scattered incident reports into one readable map — so you
+          can see what's changing before you plan your day.</p>
+        <div class="scroll-cue">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M5 12l7 7 7-7" />
+          </svg>
+          Scroll to see how
+        </div>
+      </section>
+
+      <section class="step" data-step="rau">
+        <div class="alert-card medium">
+          <div class="alert-kicker">Rau · road safety</div>
+          <div class="alert-title medium">Slow down — reports are up here</div>
+          <p class="alert-body">This stretch has logged more road-safety reports than usual this month. It's one of the
+            areas MapPe watches closest.</p>
+          <div class="alert-foot">Illustrative scenario, not a live traffic feed</div>
+        </div>
+      </section>
+
+      <section class="step align-right" data-step="vijaynagar">
+        <div class="alert-card high">
+          <div class="alert-kicker">Vijay Nagar · theft</div>
+          <div class="alert-title high">Be cautious after dark</div>
+          <p class="alert-body">Theft reports here have climbed compared to last period, mostly in the evening hours. A
+            pattern worth knowing before you're out late.</p>
+          <div class="alert-foot">Illustrative scenario, not a live incident feed</div>
+        </div>
+      </section>
+
+      <section class="step" data-step="mgroad">
+        <div class="alert-card medium">
+          <div class="alert-kicker">MG Road · road safety</div>
+          <div class="alert-title medium">Another stretch to watch</div>
+          <p class="alert-body">A similar rise in road-safety reports shows up here, concentrated around evening traffic
+            hours.</p>
+          <div class="alert-foot">Illustrative scenario, not a live traffic feed</div>
+        </div>
+      </section>
+
+      <section class="step align-right" data-step="sudamanagar">
+        <div class="alert-card high">
+          <div class="alert-kicker">Sudama Nagar · burglary</div>
+          <div class="alert-title high">Break-ins tick upward</div>
+          <p class="alert-body">Burglary reports here have increased compared to the previous period, mostly overnight.
+          </p>
+          <div class="alert-foot">Illustrative scenario, not a verified assessment</div>
+        </div>
+      </section>
+
+      <section class="step" data-step="bhawarkuan">
+        <div class="alert-card low">
+          <div class="alert-kicker">Bhawarkuan · pattern</div>
+          <div class="alert-title low">A modest, steady rise</div>
+          <p class="alert-body">Nothing dramatic — just a small increase worth monitoring. This is the everyday texture
+            MapPe is built to surface.</p>
+          <div class="alert-foot">Illustrative scenario, not a verified assessment</div>
+        </div>
+      </section>
+
+      <section class="step align-right" data-step="palasia">
+        <div class="alert-card high">
+          <div class="alert-kicker">Palasia · robbery</div>
+          <div class="alert-title high">Stay alert near the market stretch</div>
+          <p class="alert-body">Robbery reports cluster around this stretch, more often reported after sunset.</p>
+          <div class="alert-foot">Illustrative scenario, not a live incident feed</div>
+        </div>
+      </section>
+
+      <section class="step reveal" data-step="wholecity">
+        <h2>Every neighborhood, one picture.</h2>
+        <p>Forecasts, historical samples, live-alert simulations and route warnings — all on a single map, so nothing
+          gets buried in a feed.</p>
+      </section>
+
+      <section class="step login-step" data-step="login">
+        <div class="login-cta">
+          <h2>Ready when you are.</h2>
+          <p>Create an account or sign in to explore the dashboard and manage your profile.</p>
+          <div class="cta-row">
+            <button type="button" class="cta-primary" data-open-auth="login">Sign in</button>
+            <button type="button" class="cta-secondary" data-open-auth="signup">Create account</button>
+          </div>
+          <p class="cta-guest">or <a href="#" class="guest-link">continue as guest</a></p>
+          <div class="signed-in-banner" id="signed-in-banner" hidden>
+            <p>Already signed in as <strong></strong>.</p>
+            <div class="cta-row">
+              <button type="button" class="cta-primary" id="resume-session">Open dashboard</button>
+              <button type="button" class="cta-secondary" id="switch-account">Use another account</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- Auth dialog: opened on demand, so switching Login/Sign up no longer re-scrolls the page. -->
+  <div class="auth-overlay" id="auth-overlay" hidden>
+    <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="auth-heading">
+      <button type="button" class="auth-close" id="auth-close" aria-label="Close sign-in">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+          stroke-linecap="round">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+      <div class="login-mark">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2 4 5.5v6c0 5 3.4 8.7 8 9.5 4.6-.8 8-4.5 8-9.5v-6L12 2Z" />
+              <path d="M9.5 12.2 11.3 14 15 9.8" />
+            </svg>
+          </div>
+
+          <div class="auth-tabs" aria-label="Account action">
+            <button type="button" class="auth-tab active" id="tab-login" aria-pressed="true">Login</button>
+            <button type="button" class="auth-tab" id="tab-signup" aria-pressed="false">Sign up</button>
+          </div>
+
+          <h2 id="auth-heading">Sign in to MapPe</h2>
+          <p class="sub" id="auth-sub">Sign in to explore the dashboard and manage your profile.</p>
+
+          <button type="button" id="google-btn" class="google-btn">
+            <svg width="18" height="18" viewBox="0 0 18 18">
+              <path fill="#4285F4"
+                d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62Z" />
+              <path fill="#34A853"
+                d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18Z" />
+              <path fill="#FBBC05"
+                d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.97H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.03l2.97-2.33Z" />
+              <path fill="#EA4335"
+                d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.97L3.95 7.3C4.66 5.17 6.65 3.58 9 3.58Z" />
+            </svg>
+            <span id="google-btn-label">Sign in with Google</span>
+          </button>
+
+          <div class="auth-divider"><span>or continue with email</span></div>
+
+          <form id="login-form">
+            <div class="field">
+              <label for="email">Email</label>
+              <input id="email" type="email" autocomplete="username" placeholder="you@example.com" required>
+            </div>
+            <div class="field">
+              <label for="password">Password</label>
+              <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" required>
+            </div>
+            <div class="field" id="confirm-field" hidden>
+              <label for="confirm-password">Confirm password</label>
+              <input id="confirm-password" type="password" autocomplete="new-password" placeholder="••••••••">
+            </div>
+            <p class="form-status" id="form-status"></p>
+            <button type="submit" class="login-btn" id="submit-btn">Login</button>
+          </form>
+          <p class="login-foot">or <a href="#" class="guest-link">continue as guest</a></p>
+          <p class="auth-mode-note" id="auth-mode-note" hidden></p>
+          <div class="login-note">Demo data: forecasts and incidents are illustrative, not a live feed.</div>
+    </div>
+  </div>
+
+  <script src="firebase-config.js"></script>
+  <script type="module" src="auth-adapter.js"></script>
+  <script>
+    /* ---------- coordinate-projected map: pure SVG, no live tile dependency ----------
+       Latitude/longitude positions are projected into a compact canvas. This preserves
+       their relative placement while keeping the visual intentionally schematic. */
+    const PLACE_DATA = {
+      rau: { label: 'Rau', lat: 22.63727, lon: 75.81474, dx: 14, dy: 20, primary: true },
+      catsquare: { label: 'CAT Square', lat: 22.66931, lon: 75.81473, dx: -14, dy: -12 },
+      rajendranagar: { label: 'Rajendra Nagar', lat: 22.67002, lon: 75.82922, dx: 14, dy: 21 },
+      regionalpark: { label: 'Regional Park', lat: 22.67786, lon: 75.85724, dx: -14, dy: -12 },
+      bhawarkuan: { label: 'Bhanwarkuan', lat: 22.69265, lon: 75.86766, dx: 14, dy: -12, primary: true },
+      sudamanagar: { label: 'Sudama Nagar', lat: 22.69545, lon: 75.83177, dx: -14, dy: -12, primary: true },
+      airport: { label: 'Indore Airport', lat: 22.72020, lon: 75.79676, dx: 14, dy: -12 },
+      sarafa: { label: 'Sarafa Bazaar', lat: 22.71790, lon: 75.85186, dx: -18, dy: 38 },
+      rajwada: { label: 'Rajwada', lat: 22.71840, lon: 75.85520, dx: 0, dy: -31, primary: true, hub: true },
+      indorejunction: { label: 'Indore Junction', lat: 22.71701, lon: 75.86847, dx: 18, dy: 34 },
+      mgroad: { label: 'MG Road · TI Mall', lat: 22.72157, lon: 75.87862, dx: -18, dy: -28, primary: true },
+      chappan: { label: '56 Dukan', lat: 22.72417, lon: 75.88415, dx: -20, dy: 42 },
+      palasia: { label: 'Palasia', lat: 22.72371, lon: 75.88670, dx: 22, dy: -8, primary: true },
+      khajrana: { label: 'Khajrana Ganesh', lat: 22.73123, lon: 75.90813, dx: 14, dy: -12 },
+      c21: { label: 'C21 Mall', lat: 22.74395, lon: 75.89426, dx: -14, dy: 22 },
+      vijaynagar: { label: 'Vijay Nagar', lat: 22.75115, lon: 75.89555, dx: 14, dy: -12, primary: true },
+      bombayhospital: { label: 'Bombay Hospital', lat: 22.75347, lon: 75.90407, dx: 14, dy: 21 },
+      phoenix: { label: 'Phoenix Citadel', lat: 22.74632, lon: 75.93600, dx: -14, dy: -13 },
+      supercorridor: { label: 'Super Corridor', lat: 22.76205, lon: 75.81029, dx: 14, dy: -12 }
+    };
+
+    const GEO_BOUNDS = { minLon: 75.77, maxLon: 75.95, minLat: 22.62, maxLat: 22.78 };
+    const WORLD = { minX: 80, maxX: 1880, minY: 60, maxY: 1540 };
+    function project({ lat, lon }) {
+      return {
+        x: WORLD.minX + ((lon - GEO_BOUNDS.minLon) / (GEO_BOUNDS.maxLon - GEO_BOUNDS.minLon)) * (WORLD.maxX - WORLD.minX),
+        y: WORLD.minY + ((GEO_BOUNDS.maxLat - lat) / (GEO_BOUNDS.maxLat - GEO_BOUNDS.minLat)) * (WORLD.maxY - WORLD.minY)
+      };
+    }
+    const NODES = Object.fromEntries(Object.entries(PLACE_DATA).map(([key, place]) => [key, { ...place, ...project(place) }]));
+    const SEV = { low: '#E8A33D', medium: '#C1502E', high: '#7A1F2B' };
+
+    function svgElement(name, attributes = {}) {
+      const element = document.createElementNS('http://www.w3.org/2000/svg', name);
+      Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
+      return element;
+    }
+
+    const corridors = [
+      ['rau', 'catsquare', 'rajendranagar', 'regionalpark', 'bhawarkuan', 'rajwada', 'indorejunction', 'mgroad', 'palasia', 'c21', 'vijaynagar', 'bombayhospital', 'phoenix'],
+      ['airport', 'sudamanagar', 'rajwada', 'indorejunction', 'khajrana', 'phoenix'],
+      ['airport', 'supercorridor', 'vijaynagar', 'phoenix'],
+      ['sarafa', 'rajwada', 'mgroad']
+    ];
+    const networkLayer = document.getElementById('network-lines');
+    corridors.forEach((keys, index) => {
+      const points = keys.map(key => `${NODES[key].x.toFixed(1)},${NODES[key].y.toFixed(1)}`).join(' ');
+      networkLayer.appendChild(svgElement('polyline', { points, class: `map-corridor${index > 1 ? ' minor' : ''}` }));
+    });
+
+    const pointLayer = document.getElementById('map-points');
+    Object.entries(NODES).forEach(([key, place]) => {
+      const group = svgElement('g', { id: `node-${key}`, 'data-node': key, class: `map-point${place.primary ? '' : ' secondary'}` });
+      const title = svgElement('title');
+      title.textContent = `${place.label}: ${place.lat.toFixed(5)}, ${place.lon.toFixed(5)}`;
+      group.appendChild(title);
+      group.appendChild(svgElement('circle', { class: 'node-ring', cx: place.x, cy: place.y, r: place.hub ? 22 : 15, stroke: place.hub ? '#2C5C8A' : '#6F8AA6' }));
+      group.appendChild(svgElement('circle', { class: 'node-dot', cx: place.x, cy: place.y, r: place.hub ? 7 : (place.primary ? 6 : 4.5), fill: place.hub ? '#2C5C8A' : '#6F8AA6' }));
+      const label = svgElement('text', {
+        class: `node-label${place.hub ? ' hub' : ''}`,
+        x: place.x + place.dx,
+        y: place.y + place.dy,
+        'text-anchor': place.dx < 0 ? 'end' : (place.dx === 0 ? 'middle' : 'start')
+      });
+      label.textContent = place.label;
+      group.appendChild(label);
+      pointLayer.appendChild(group);
+    });
+
+    // Where the "camera" (the #camera group) looks for each scroll step.
+    // zoom 1 = whole city fits the viewBox; higher = zoomed into that node.
+    const SPOTS = {
+      hero: { center: { x: 800, y: 800 }, zoom: .72 },
+      rau: { node: 'rau', zoom: 1.04 },
+      vijaynagar: { node: 'vijaynagar', zoom: 1.06 },
+      mgroad: { node: 'mgroad', zoom: 1.08 },
+      sudamanagar: { node: 'sudamanagar', zoom: 1.06 },
+      bhawarkuan: { node: 'bhawarkuan', zoom: 1.04 },
+      palasia: { node: 'palasia', zoom: 1.08 },
+      wholecity: { node: null, zoom: .72 },
+      login: { node: null, zoom: .68 }
+    };
+
+    const VIEW_W = 1400, VIEW_H = 1080;
+    const camera = document.getElementById('camera');
+    const mapSurface = document.querySelector('.map-sticky');
+    let view = { tx: 0, ty: 0, scale: 1 };
+    let drag = null;
+    let currentStep = 'hero';
+
+    function clampView() {
+      const margin = 170;
+      const minTx = VIEW_W - WORLD.maxX * view.scale - margin;
+      const maxTx = margin - WORLD.minX * view.scale;
+      const minTy = VIEW_H - WORLD.maxY * view.scale - margin;
+      const maxTy = margin - WORLD.minY * view.scale;
+      view.tx = Math.min(maxTx, Math.max(minTx, view.tx));
+      view.ty = Math.min(maxTy, Math.max(minTy, view.ty));
+    }
+
+    function applyCamera(animate = true) {
+      clampView();
+      camera.classList.toggle('dragging', !animate);
+      camera.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
+    }
+
+    function flyToStep(key) {
+      const spot = SPOTS[key];
+      if (!spot) return;
+      const center = spot.node ? NODES[spot.node] : (spot.center || { x: (WORLD.minX + WORLD.maxX) / 2, y: (WORLD.minY + WORLD.maxY) / 2 });
+      const s = spot.zoom;
+      view = { tx: VIEW_W / 2 - center.x * s, ty: VIEW_H / 2 - center.y * s, scale: s };
+      applyCamera(true);
+    }
+
+    mapSurface.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'touch' && !mapSurface.classList.contains('touch-explore')) return;
+      if (event.target.closest('button, input, a, .login-card')) return;
+      event.preventDefault();
+      drag = { x: event.clientX, y: event.clientY, tx: view.tx, ty: view.ty };
+      mapSurface.classList.add('dragging');
+      mapSurface.setPointerCapture(event.pointerId);
+    });
+    mapSurface.addEventListener('pointermove', (event) => {
+      if (!drag) return;
+      event.preventDefault();
+      const sx = VIEW_W / mapSurface.clientWidth;
+      const sy = VIEW_H / mapSurface.clientHeight;
+      view.tx = drag.tx + (event.clientX - drag.x) * sx;
+      view.ty = drag.ty + (event.clientY - drag.y) * sy;
+      applyCamera(false);
+    });
+    function finishDrag() { drag = null; mapSurface.classList.remove('dragging'); }
+    mapSurface.addEventListener('pointerup', finishDrag);
+    mapSurface.addEventListener('pointercancel', finishDrag);
+
+    const touchMapToggle = document.getElementById('touch-map-toggle');
+    touchMapToggle.addEventListener('click', () => {
+      const enabled = mapSurface.classList.toggle('touch-explore');
+      touchMapToggle.setAttribute('aria-pressed', String(enabled));
+      touchMapToggle.textContent = enabled ? 'Scroll page' : 'Explore map';
+    });
+    document.getElementById('skip-to-login').addEventListener('click', () => openAuth('login'));
+    document.getElementById('reset-map').addEventListener('click', () => flyToStep(currentStep));
+
+    function dropAlert(key, color, shape) {
+      const node = NODES[key];
+      if (!node) return;
+      const ns = 'http://www.w3.org/2000/svg';
+      const group = document.getElementById('alert-marks');
+
+      const ring = document.createElementNS(ns, 'circle');
+      ring.setAttribute('class', 'pulse-ring');
+      ring.setAttribute('cx', node.x);
+      ring.setAttribute('cy', node.y);
+      ring.setAttribute('r', 10);
+      ring.setAttribute('stroke', color);
+      group.appendChild(ring);
+
+      if (shape === 'triangle') {
+        // road-safety / accident alerts get a triangle mark
+        const tri = document.createElementNS(ns, 'path');
+        const x = node.x, y = node.y;
+        tri.setAttribute('d', `M${x},${y - 8} L${x + 7.5},${y + 6} L${x - 7.5},${y + 6} Z`);
+        tri.setAttribute('fill', color);
+        tri.setAttribute('stroke', '#14202E');
+        tri.setAttribute('stroke-width', '2');
+        tri.setAttribute('stroke-linejoin', 'round');
+        group.appendChild(tri);
+      } else {
+        // crime alerts keep the circular mark
+        const core = document.createElementNS(ns, 'circle');
+        core.setAttribute('cx', node.x);
+        core.setAttribute('cy', node.y);
+        core.setAttribute('r', 7);
+        core.setAttribute('fill', color);
+        core.setAttribute('stroke', '#14202E');
+        core.setAttribute('stroke-width', '2');
+        group.appendChild(core);
+      }
+
+      const dot = document.querySelector(`#node-${key} .node-dot`);
+      const label = document.querySelector(`#node-${key} .node-label`);
+      if (dot) { dot.setAttribute('fill', color); dot.setAttribute('r', 8); }
+      if (label) label.classList.add('armed');
+    }
+
+    const veil = document.getElementById('veil');
+    const steps = document.querySelectorAll('.step');
+    const alertMeta = {
+      rau: { color: SEV.medium, shape: 'triangle' },
+      mgroad: { color: SEV.medium, shape: 'triangle' },
+      vijaynagar: { color: SEV.high, shape: 'circle' },
+      sudamanagar: { color: SEV.high, shape: 'circle' },
+      palasia: { color: SEV.high, shape: 'circle' },
+      bhawarkuan: { color: SEV.low, shape: 'circle' }
+    };
+    const firedAlerts = new Set();
+
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        const key = entry.target.dataset.step;
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          entry.target.classList.add('active');
+          currentStep = key;
+          flyToStep(key);
+          if (alertMeta[key] && !firedAlerts.has(key)) {
+            firedAlerts.add(key);
+            dropAlert(key, alertMeta[key].color, alertMeta[key].shape);
+          }
+          veil.classList.toggle('deep', key === 'login');
+          document.body.classList.toggle('auth-visible', key === 'login');
+        } else if (!entry.isIntersecting) {
+          entry.target.classList.remove('active');
+        }
+      });
+    }, { threshold: [0, 0.5, 1] });
+
+    steps.forEach(step => io.observe(step));
+    flyToStep('hero');
+
+    /* Auth adapter contract: tomorrow auth-adapter.js can set window.LOGIN_AUTH.
+       Expected methods: signIn(email,password), signUp(email,password), google().
+       Every successful method may return { user }. The page then dispatches
+       `login:success` and redirects to LOGIN_CONFIG.dashboardUrl. */
+    let authMode = 'login'; // 'login' | 'signup'
+
+    function resolveAuth(method) {
+      if (typeof window.LOGIN_AUTH?.[method] === 'function') return { fn: window.LOGIN_AUTH[method].bind(window.LOGIN_AUTH), source: 'firebase' };
+      showStatus(window.LOGIN_AUTH_ERROR || 'Connecting to Firebase. Please wait and try again.', true);
+      return null;
+    }
+
+    const tabLogin = document.getElementById('tab-login');
+    const tabSignup = document.getElementById('tab-signup');
+    const authHeading = document.getElementById('auth-heading');
+    const authSub = document.getElementById('auth-sub');
+    const submitBtn = document.getElementById('submit-btn');
+    const confirmField = document.getElementById('confirm-field');
+    const confirmInput = document.getElementById('confirm-password');
+    const googleLabel = document.getElementById('google-btn-label');
+    const passwordInput = document.getElementById('password');
+    const emailInput = document.getElementById('email');
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      const isSignup = mode === 'signup';
+      tabLogin.classList.toggle('active', !isSignup);
+      tabSignup.classList.toggle('active', isSignup);
+      tabLogin.setAttribute('aria-pressed', String(!isSignup));
+      tabSignup.setAttribute('aria-pressed', String(isSignup));
+      authHeading.textContent = isSignup ? 'Create your account' : 'Sign in to MapPe';
+      authSub.textContent = isSignup ? 'Set up your account to access the dashboard.' : 'Sign in to explore the dashboard and manage your profile.';
+      submitBtn.textContent = isSignup ? 'Sign up' : 'Login';
+      googleLabel.textContent = isSignup ? 'Sign up with Google' : 'Sign in with Google';
+      confirmField.hidden = !isSignup;
+      confirmInput.required = isSignup;
+      document.getElementById('form-status').textContent = '';
+      passwordInput.setAttribute('autocomplete', isSignup ? 'new-password' : 'current-password');
+    }
+
+    tabLogin.addEventListener('click', () => setAuthMode('login'));
+    tabSignup.addEventListener('click', () => setAuthMode('signup'));
+    const loginConfig = Object.assign({ dashboardUrl: './index.html' }, window.LOGIN_CONFIG || {});
+    function rememberSession(provider, email) {
+      try { localStorage.setItem('mappe.session', JSON.stringify({ provider, email: email || null, at: Date.now() })); } catch { }
+    }
+
+    function completeAuth(detail) {
+      const email = detail?.user?.email || emailInput.value.trim().toLowerCase();
+      rememberSession(typeof window.LOGIN_AUTH?.onUser === 'function' ? 'firebase' : 'local', email);
+      window.dispatchEvent(new CustomEvent('login:success', { detail }));
+      window.location.assign(loginConfig.dashboardUrl);
+    }
+    function showStatus(message, error = false) {
+      const status = document.getElementById('form-status');
+      status.style.color = error ? 'var(--sev-high)' : 'var(--ink-soft)';
+      status.textContent = message;
+    }
+    async function handleEmailAuth(email, password) {
+      const method = authMode === 'signup' ? 'signUp' : 'signIn';
+      const resolved = resolveAuth(method);
+      if (!resolved) return;
+      submitBtn.disabled = true;
+      showStatus(authMode === 'signup' ? 'Creating your account…' : 'Signing you in…');
+      try {
+        const result = await resolved.fn(email, password);
+        completeAuth(result);
+      } catch (error) {
+        showStatus(error.message || 'Could not authenticate. Please try again.', true);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    async function handleGoogleAuth() {
+      const resolved = resolveAuth('google');
+      if (!resolved) return;
+      try { completeAuth(await resolved.fn()); }
+      catch (error) { showStatus(error.message || 'Could not sign in with Google.', true); }
+    }
+
+    document.getElementById('google-btn').addEventListener('click', handleGoogleAuth);
+    document.querySelectorAll('.guest-link').forEach(link => {
+      link.addEventListener('click', (event) => {
+        event.preventDefault();
+        rememberSession('guest', null);
+        window.dispatchEvent(new CustomEvent('login:guest'));
+        window.location.assign(loginConfig.dashboardUrl);
+      });
+    });
+
+    document.getElementById('login-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      if (authMode === 'signup' && password !== confirmInput.value) {
+        return showStatus("Passwords don't match.", true);
+      }
+      handleEmailAuth(email, password);
+    });
+
+    /* ---------- modal: opens over the story, so nothing scrolls or re-centers ---------- */
+    const authOverlay = document.getElementById('auth-overlay');
+    const authDialog = authOverlay.querySelector('.login-card');
+    const modeNote = document.getElementById('auth-mode-note');
+    let lastFocused = null;
+
+    function refreshModeNote() {
+      const usingFirebase = typeof window.LOGIN_AUTH?.signIn === 'function';
+      modeNote.hidden = usingFirebase;
+      modeNote.textContent = window.LOGIN_AUTH_ERROR || 'Connecting securely to Firebase…';
+      submitBtn.disabled = !usingFirebase;
+      const googleReady = typeof window.LOGIN_AUTH?.google === 'function';
+      document.getElementById('google-btn').disabled = !googleReady;
+      document.getElementById('google-btn').style.opacity = googleReady ? '1' : '.55';
+    }
+
+    function openAuth(mode = 'login') {
+      lastFocused = document.activeElement;
+      setAuthMode(mode);
+      refreshModeNote();
+      authOverlay.hidden = false;
+      document.body.classList.add('auth-open');
+      requestAnimationFrame(() => authOverlay.classList.add('open'));
+      setTimeout(() => emailInput.focus({ preventScroll: true }), 60);
+    }
+
+    function closeAuth() {
+      authOverlay.classList.remove('open');
+      document.body.classList.remove('auth-open');
+      setTimeout(() => { authOverlay.hidden = true; }, 180);
+      if (lastFocused?.focus) lastFocused.focus({ preventScroll: true });
+    }
+
+    document.querySelectorAll('[data-open-auth]').forEach(btn => {
+      btn.addEventListener('click', () => openAuth(btn.dataset.openAuth));
+    });
+    document.getElementById('auth-close').addEventListener('click', closeAuth);
+    authOverlay.addEventListener('mousedown', (event) => {
+      if (event.target === authOverlay) closeAuth();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (authOverlay.hidden) return;
+      if (event.key === 'Escape') return closeAuth();
+      if (event.key !== 'Tab') return;
+      // keep focus inside the dialog while it is open
+      const focusable = authDialog.querySelectorAll('button:not([disabled]), input:not([hidden]), a[href]');
+      const list = Array.from(focusable).filter(el => el.offsetParent !== null);
+      if (!list.length) return;
+      const first = list[0], last = list[list.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
+
+    window.addEventListener('login-auth:error', () => { refreshModeNote(); showStatus(window.LOGIN_AUTH_ERROR, true); });
+    window.addEventListener('login-auth:ready', () => {
+      refreshModeNote();
+      // If Firebase already has a session, offer the dashboard instead of a second sign-in.
+      window.LOGIN_AUTH.onUser?.(user => {
+        if (!user) return;
+        const banner = document.getElementById('signed-in-banner');
+        banner.hidden = false;
+        banner.querySelector('strong').textContent = user.email || 'your account';
+      });
+    });
+
+    document.getElementById('resume-session').addEventListener('click', () => {
+      rememberSession('firebase', window.LOGIN_AUTH?.auth?.currentUser?.email);
+      window.location.assign(loginConfig.dashboardUrl);
+    });
+    document.getElementById('switch-account').addEventListener('click', async () => {
+      try { await window.LOGIN_AUTH?.signOut?.(); } catch (error) { showStatus(error.message || 'Could not sign out. Try again.', true); return; }
+      try { localStorage.removeItem('mappe.session'); } catch { }
+      document.getElementById('signed-in-banner').hidden = true;
+    });
+
+    refreshModeNote();
+    // deep link support: login-story.html#signin or #signup opens the dialog straight away
+    const hash = window.location.hash.toLowerCase();
+    if (hash === '#signin' || hash === '#login') openAuth('login');
+    if (hash === '#signup' || hash === '#register') openAuth('signup');
+  </script>
+</body>
+
+</html>

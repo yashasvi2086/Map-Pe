@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MapPe — Crime & Accident Detector</title>
+  <script>
+    // A local HTML file cannot start the localhost server itself. Detect that
+    // case before the app loads so users see useful launch instructions.
+    if (location.protocol === 'file:') {
+      document.documentElement.classList.add('direct-file-open');
+      document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('direct-file-message').hidden = false;
+      });
+    }
+  </script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+    rel="stylesheet">
+
+  <!-- Prebuilt locally: no browser-side CSS compiler or CDN dependency. -->
+  <link rel="stylesheet" href="vendor/tailwind.css" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="vendor/leaflet.css" />
+  <link rel="stylesheet" href="vendor/MarkerCluster.css" />
+  <link rel="stylesheet" href="vendor/MarkerCluster.Default.css" />
+
+  <!-- Custom design tokens -->
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="dashboard-ui.css" />
+
+  <!-- Sign-in gate: config, then the Firebase adapter, then the guard -->
+  <script src="firebase-config.js"></script>
+  <script type="module" src="auth-adapter.js"></script>
+  <script defer src="auth-guard.js"></script>
+
+</head>
+
+<body class="font-body text-ink bg-canvas h-full overflow-hidden">
+
+  <section id="direct-file-message" aria-labelledby="direct-file-title" hidden>
+    <div>
+      <p class="direct-file-kicker">MapPe</p>
+      <h1 id="direct-file-title">Start the local website first</h1>
+      <p>This HTML file cannot launch a web server. Extract the complete project folder, then use the launcher for your
+        computer.</p>
+      <div class="direct-file-options">
+        <p><strong>Windows</strong><span>Double-click Start Dashboard.vbs — opens without a CMD window</span></p>
+        <p><strong>Windows</strong><span>Use Stop Dashboard.vbs when finished</span></p>
+      </div>
+      <a href="http://127.0.0.1:8765/indexxx.html">Open localhost if the launcher is already running</a>
+      <small>On Windows, the server runs quietly in the background. Use Stop local server in the dashboard when
+        finished. See README.md for help.</small>
+    </div>
+  </section>
+
+  <div class="flex flex-col h-screen">
+
+    <!-- ============================= HEADER ============================= -->
+    <header
+      class="h-16 shrink-0 bg-[var(--ink)] text-white flex items-center justify-between px-4 md:px-6 z-[1100] relative">
+      <div class="flex items-center gap-3">
+        <button id="sidebar-toggle"
+          class="w-9 h-9 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+          aria-label="Hide sidebar" aria-controls="sidebar" aria-expanded="true" title="Hide sidebar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+          </svg>
+        </button>
+        <div class="w-9 h-9 rounded-lg bg-[var(--primary)] flex items-center justify-center shrink-0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2 4 5.5v6c0 5 3.4 8.7 8 9.5 4.6-.8 8-4.5 8-9.5v-6L12 2Z" />
+            <path d="M9.5 12.2 11.3 14 15 9.8" />
+          </svg>
+        </div>
+        <div class="leading-tight">
+          <h1 class="font-display font-bold text-[15px] tracking-tight">MapPe</h1>
+          <p class="text-[11px] text-white/60 -mt-0.5">Crime Detection &amp; Rate Prediction System</p>
+        </div>
+      </div>
+
+      <div class="dashboard-summary hidden md:flex items-center gap-6 text-[12px] text-white/70">
+        <span id="result-count" class="font-medium text-white/90"></span>
+        <span class="w-px h-4 bg-white/20"></span>
+        <span>Sample data as of <span class="text-white font-medium">Jul 5, 2026</span></span>
+        <span class="flex items-center gap-1.5">
+          <span class="w-px h-4 bg-white/20"></span>
+          <span class="live-dot"></span>
+          <span id="live-count-badge" class="hidden font-medium text-white/90">0</span>
+          <span class="text-white/60">simulated reports</span>
+        </span>
+      </div>
+      <div class="header-actions">
+        <button id="faq-button" class="stop-server-button" type="button" aria-haspopup="dialog">FAQ</button>
+        <button id="emergency-button" class="stop-server-button" type="button" aria-haspopup="dialog">Emergency</button>
+        <div id="account-actions"></div>
+        <button id="stop-local-server" class="stop-server-button" hidden>Stop local server</button>
+      </div>
+    </header>
+
+    <nav class="workspace-nav" aria-label="Dashboard views"><button id="tab-forecast" class="workspace-tab active"
+        aria-pressed="true"><span>01</span> Area forecasts</button><button id="tab-route" class="workspace-tab"
+        aria-pressed="false"><span>02</span> Route alerts</button>
+      <p>INDORE & SURROUNDINGS <b>Demo workspace</b></p>
+    </nav><!-- ============================= BODY ============================= -->
+    <div class="flex flex-1 min-h-0 relative">
+
+      <!-- ------------------------- SIDEBAR ------------------------- -->
+      <aside id="sidebar" data-open="true" aria-label="Dashboard sidebar"
+        class="w-[320px] shrink-0 bg-white border-r border-[var(--line)] flex flex-col z-[1000]">
+        <!-- Drag handle for resizing -->
+        <div id="sidebar-resize" class="sidebar-resize-handle" title="Drag to resize sidebar"></div>
+        <div class="side-scroll overflow-y-auto flex-1 px-5 py-5 space-y-6">
+
+          <section id="forecast-panel">
+            <div class="eyebrow">AREA INTELLIGENCE · DEMO</div>
+            <h2 class="panel-title">See what could change.</h2>
+            <p class="panel-intro">Explore illustrative crime trends for the next 30 days.</p>
+            <div class="data-note">Sample forecasts, not a trained model or verified assessment of these areas.</div>
+            <div class="analysis-launcher">
+              <div><strong>Explore the dataset</strong><p id="analysis-preview">Neighborhoods, trends, and crime types.</p></div>
+              <button id="open-analysis" type="button" aria-controls="dataset-analysis" aria-expanded="false">Open analysis ↗</button>
+            </div>
+            <div id="forecast-list"></div>
+            <p class="forecast-foot">Scenario window: 6 Jul – 4 Aug 2026<br>Fixed examples for your future ML
+              integration.</p>
+          </section><!-- Filters -->
+          <section>
+            <h2 class="font-display font-semibold text-[13px] uppercase tracking-wide text-[var(--ink-soft)] mb-3">
+              Filters</h2>
+
+            <label class="block text-xs font-medium text-[var(--ink-soft)] mb-1.5">Neighborhood</label>
+            <select id="region-select"
+              class="w-full text-sm border border-[var(--line)] rounded-lg px-3 py-2 bg-white mb-4 focus:border-[var(--primary)]">
+              <option value="all">All Neighborhoods</option>
+            </select>
+
+            <label class="block text-xs font-medium text-[var(--ink-soft)] mb-1.5">Crime type</label>
+            <div id="type-chips" class="flex flex-wrap gap-1.5 mb-4"></div>
+
+            <label class="block text-xs font-medium text-[var(--ink-soft)] mb-1.5">Timeframe</label>
+            <input id="lookback-range" type="range" min="7" max="90" step="1" value="90" class="w-full mb-1.5" />
+            <p id="lookback-label" class="text-[11px] text-[var(--ink-soft)]"></p>
+
+            <button id="reset-filters"
+              class="mt-4 w-full text-xs font-medium text-[var(--primary)] border border-[var(--primary)]/30 rounded-lg py-2 hover:bg-[var(--primary-soft)] transition-colors">
+              Reset filters
+            </button>
+          </section>
+
+          <div class="h-px bg-[var(--line)]"></div>
+
+          <!-- Navigate -->
+          <section id="route-panel">
+            <h2 class="font-display font-semibold text-[13px] uppercase tracking-wide text-[var(--ink-soft)] mb-3">
+              Plan your journey</h2>
+            <p class="panel-intro">Choose your stops. Review the road ahead.</p>
+            <div class="route-data-note">Sample incident data · no live incident feed</div>
+            <div class="search-scope-row"><label for="place-search-scope">Search area</label><select id="place-search-scope"><option value="indore">Indore & surroundings</option><option value="india">All India</option></select></div>
+            <div class="journey-fields"><label for="origin-mode"
+              class="field-label">Starting point</label><select id="origin-mode">
+              <option value="gps">My current location (GPS)</option>
+              <option value="manual">Enter a starting location</option>
+              <option value="medicaps">Medicaps University · demo starting point</option>
+            </select>
+            <div id="origin-manual" hidden>
+              <label for="origin-input" class="field-label">Starting address or place</label>
+              <div class="flex gap-2"><input id="origin-input" class="flex-1 min-w-0 border rounded-lg p-3 text-sm"
+                  placeholder="e.g. Medicaps University, Indore"><button id="origin-search"
+                  class="rounded-lg px-3 bg-primary text-white text-sm">Search</button></div>
+              <div id="origin-results" class="my-2" aria-live="polite"></div>
+            </div>
+            <p id="origin-summary" class="forecast-foot" aria-live="polite">GPS will be requested when you start
+              navigation.</p>
+
+            <label for="nav-search-input" class="field-label">Destination</label>
+            <div class="flex gap-1.5 mb-2">
+              <input id="nav-search-input" type="text" placeholder="Search an address or place"
+                class="flex-1 min-w-0 text-sm border border-[var(--line)] rounded-lg px-3 py-2 bg-white focus:border-[var(--primary)]" />
+              <button id="nav-search-btn"
+                class="text-xs font-semibold text-white bg-[var(--primary)] rounded-lg px-3 hover:bg-[var(--primary-deep)] transition-colors">Search</button>
+            </div>
+
+            <button id="nav-pick-map" data-active="false"
+              class="nav-pick-btn w-full text-xs font-medium rounded-lg py-2 mb-2 border transition-colors">
+              Place or adjust a pin on the map
+            </button>
+            <div id="destination-results" aria-live="polite"></div>
+
+            <div id="nav-destination-summary"
+              class="hidden bg-[var(--canvas)] rounded-lg px-3 py-2.5 mb-2 flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-[10px] uppercase tracking-wide text-[var(--ink-soft)] font-medium mb-0.5">Destination</p>
+                <p id="nav-destination-label" class="text-xs text-[var(--ink)] leading-snug"></p>
+              </div>
+              <button id="nav-clear-destination" class="shrink-0 text-[var(--ink-soft)] hover:text-[var(--ink)] text-sm"
+                aria-label="Clear destination">&times;</button>
+            </div>
+
+            </div>
+            <p id="nav-status" class="text-[11px] text-[var(--ink-soft)] mb-3">Search or drop a pin to set a destination
+            </p>
+
+            <button id="nav-start" disabled
+              class="w-full text-sm font-semibold text-white bg-[var(--ink)] rounded-lg py-2.5 mb-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-black transition-colors">
+              Start navigation
+            </button>
+            <button id="nav-stop"
+              class="hidden w-full text-sm font-semibold text-[var(--primary)] border border-[var(--primary)] rounded-lg py-2.5 mb-2 hover:bg-[var(--primary-soft)] transition-colors">
+              Stop navigation
+            </button>
+
+            <div id="nav-summary" class="hidden bg-[var(--ink)] rounded-xl p-3.5 text-white mb-2">
+              <p id="eta-provider" class="text-sm text-white/80 mb-2">Estimated driving time · no live traffic</p>
+              <div class="flex items-baseline gap-2">
+                <span id="nav-eta" class="font-display text-xl font-bold">—</span>
+                <span class="text-xs text-white/60">·</span>
+                <span id="nav-distance" class="text-sm text-white/80">—</span>
+              </div>
+              <p id="eta-detail" class="text-sm text-white/80 mt-2">Road-speed estimate from OSRM. Traffic and stops can
+                change actual journey time.</p>
+              <p id="route-endpoints" class="text-sm text-white/80 mt-2"></p>
+              <details class="route-directions"><summary>Turn-by-turn directions</summary><ol id="nav-steps"
+                class="mt-2.5 pt-2.5 border-t border-white/10 flex flex-col gap-1.5 max-h-[220px] overflow-y-auto side-scroll">
+              </ol></details>
+            </div>
+            <div id="route-warnings" aria-live="polite">
+              <div class="warning-heading"><h3>Nearby records</h3><b>Sample data</b></div>
+              <p class="empty-route">Plan a journey to explore records along the route.</p>
+            </div>
+          </section>
+
+          <div class="h-px bg-[var(--line)]"></div>
+
+          <!-- Live Alerts -->
+          <section id="simulation-panel">
+            <details class="route-demo"><summary>Explore a demo</summary>
+            <button id="example-route" class="example-route">Try Medicaps → Patalpani <span>↗</span></button>
+            <h2 class="font-display font-semibold text-[13px] uppercase tracking-wide text-[var(--ink-soft)] mb-3">Live
+              Alerts · simulated</h2>
+            <p class="text-xs text-[var(--ink-soft)] leading-relaxed mb-3">
+              Test in-tab alerts using fictional reports near your location. No live incident feed is connected.
+            </p>
+
+            <button id="live-toggle" data-active="false"
+              class="live-toggle-btn w-full text-sm font-semibold rounded-lg py-2.5 mb-2 transition-colors">
+              Enable live alerts
+            </button>
+            <p id="live-status-text" class="text-[11px] text-[var(--ink-soft)] mb-3">Live alerts are off</p>
+
+            <label class="flex items-center justify-between text-xs font-medium text-[var(--ink-soft)] mb-1.5">
+              <span>Alert radius</span>
+              <span id="live-radius-label">500m radius</span>
+            </label>
+            <input id="live-radius" type="range" min="150" max="1500" step="50" value="500" class="w-full mb-3" />
+
+            <button id="live-simulate"
+              class="w-full text-xs font-medium text-[var(--ink-soft)] border border-[var(--line)] rounded-lg py-2 hover:bg-[var(--canvas)] transition-colors">
+              Simulate a nearby report
+            </button>
+            </details>
+          </section>
+
+          <div class="h-px bg-[var(--line)]"></div>
+
+          <!-- KPIs -->
+          <section>
+            <h2 class="font-display font-semibold text-[13px] uppercase tracking-wide text-[var(--ink-soft)] mb-3">Key
+              Indicators</h2>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="col-span-2 bg-[var(--canvas)] rounded-xl p-3.5 border border-[var(--line)]">
+                <p class="text-[11px] font-medium text-[var(--ink-soft)]">Total Incidents</p>
+                <p id="kpi-total" class="font-display text-2xl font-bold mt-0.5">0</p>
+                <p id="kpi-change" class="text-xs font-medium mt-1 text-slate-400">—</p>
+              </div>
+              <div class="col-span-2 bg-[var(--canvas)] rounded-xl p-3.5 border border-[var(--line)]">
+                <p class="text-[11px] font-medium text-[var(--ink-soft)]">Most Common Crime Type</p>
+                <p id="kpi-top-type" class="font-display text-lg font-bold mt-0.5">—</p>
+                <p id="kpi-top-type-sub" class="text-xs text-[var(--ink-soft)] mt-0.5">—</p>
+              </div>
+            </div>
+          </section>
+
+          <div class="h-px bg-[var(--line)]"></div>
+
+          <!-- Breakdown chart -->
+          <section>
+            <h2 class="font-display font-semibold text-[13px] uppercase tracking-wide text-[var(--ink-soft)] mb-3">Crime
+              Distribution</h2>
+            <div class="relative h-[220px]">
+              <canvas id="breakdown-chart"></canvas>
+              <p id="chart-empty"
+                class="hidden absolute inset-0 flex items-center justify-center text-xs text-[var(--ink-soft)]">No
+                incidents match these filters.</p>
+            </div>
+          </section>
+
+          <div class="h-px bg-[var(--line)]"></div>
+
+          <!-- Neighborhood Comparison Bar Chart -->
+          <section>
+            <h2 class="font-display font-semibold text-[13px] uppercase tracking-wide text-[var(--ink-soft)] mb-3">Neighborhood Comparison</h2>
+            <div class="sidebar-chart-card">
+              <p class="sidebar-chart-subtitle">Incidents per area</p>
+              <div class="relative" style="height:220px">
+                <canvas id="neighborhood-bar-chart"></canvas>
+              </div>
+            </div>
+          </section>
+
+          <div class="h-px bg-[var(--line)]"></div>
+
+          <!-- Crime Type Pie Chart -->
+          <section>
+            <h2 class="font-display font-semibold text-[13px] uppercase tracking-wide text-[var(--ink-soft)] mb-3">Crime Type Breakdown</h2>
+            <div class="sidebar-chart-card">
+              <p class="sidebar-chart-subtitle">Proportion by type</p>
+              <div class="relative" style="height:260px">
+                <canvas id="crime-pie-chart"></canvas>
+              </div>
+            </div>
+          </section>
+
+          <div class="h-px bg-[var(--line)]"></div>
+
+          <!-- Safety Index -->
+          <section>
+            <h2 class="font-display font-semibold text-[13px] uppercase tracking-wide text-[var(--ink-soft)] mb-3">
+              Safety Index</h2>
+            <div class="bg-[var(--ink)] rounded-xl p-4 text-white">
+              <div class="flex items-center gap-4">
+                <div class="relative w-[100px] h-[100px] shrink-0">
+                  <svg viewBox="0 0 140 140" class="w-full h-full -rotate-[135deg]">
+                    <circle cx="70" cy="70" r="54" class="gauge-arc-bg" stroke-dasharray="254.47 84.82" />
+                    <circle id="gauge-value-arc" cx="70" cy="70" r="54" class="gauge-arc-value" stroke="#2C5C8A"
+                      stroke-dasharray="0 339.29" />
+                  </svg>
+                  <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span id="gauge-score" class="font-display text-2xl font-bold">—</span>
+                    <span class="text-[9px] uppercase tracking-wide text-white/50">/ 100</span>
+                  </div>
+                </div>
+                <div class="min-w-0">
+                  <p id="gauge-label" class="font-display font-semibold text-sm">—</p>
+                  <p id="safety-region-name" class="text-[11px] text-white/50 mt-0.5">All Neighborhoods</p>
+                </div>
+              </div>
+              <p id="safety-tip" class="text-[12px] leading-relaxed text-white/75 mt-3 pt-3 border-t border-white/10">
+                Awareness tips will appear here based on your current selection.
+              </p>
+            </div>
+          </section>
+
+        </div>
+      </aside>
+
+      <!-- backdrop for mobile sidebar -->
+      <div id="sidebar-backdrop" class="hidden lg:hidden"></div>
+
+      <!-- ------------------------- MAP ------------------------- -->
+      <main class="flex-1 relative min-w-0">
+        <div id="map" class="absolute inset-0 z-0"></div>
+
+        <!-- Floating region badge -->
+        <div
+          class="absolute top-4 left-4 z-[500] bg-white/95 backdrop-blur rounded-lg px-3.5 py-2 shadow-md border border-[var(--line)]">
+          <p class="text-[10px] uppercase tracking-wide text-[var(--ink-soft)] font-medium">Viewing</p>
+          <p id="map-region-badge" class="font-display font-semibold text-sm">All Neighborhoods</p>
+        </div>
+
+        <!-- Map mode toggle -->
+        <div
+          class="segmented absolute top-4 right-4 z-[500] bg-white/95 backdrop-blur rounded-lg p-1 shadow-md border border-[var(--line)] flex gap-1">
+          <button id="mode-cluster" data-active="true" aria-pressed="true"
+            class="text-xs font-medium px-3 py-1.5 rounded-md transition-colors">Markers</button>
+          <button id="mode-heat" data-active="false" aria-pressed="false"
+            class="text-xs font-medium px-3 py-1.5 rounded-md transition-colors">Heatmap</button>
+        </div>
+
+        <!-- Live alert toasts -->
+        <div id="toast-container"
+          class="absolute top-4 left-1/2 -translate-x-1/2 z-[1200] w-[320px] max-w-[90vw] flex flex-col gap-2 pointer-events-none">
+        </div>
+
+        <!-- Severity legend -->
+        <div id="severity-legend"
+          class="absolute bottom-6 left-4 z-[500] bg-white/95 backdrop-blur rounded-lg px-4 py-3 shadow-md border border-[var(--line)]">
+          <p class="text-[10px] uppercase tracking-wide text-[var(--ink-soft)] font-medium mb-2">Severity</p>
+          <div class="flex flex-col gap-1.5 text-xs text-[var(--ink-soft)]">
+            <div class="flex items-center gap-2"><span class="swatch" style="background:#E8A33D"></span>Low</div>
+            <div class="flex items-center gap-2"><span class="swatch" style="background:#C1502E"></span>Medium</div>
+            <div class="flex items-center gap-2"><span class="swatch" style="background:#7A1F2B"></span>High</div>
+          </div>
+        </div>
+        <div id="heat-legend" class="heat-legend" hidden><strong>Sample concentration</strong><div class="heat-scale"></div><div class="heat-scale-labels"><span>Lower</span><span>Higher</span></div><small>Weighted by incident severity</small></div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Leaflet + plugins -->
+  <script src="vendor/leaflet.js"></script>
+  <script src="vendor/leaflet.markercluster.js"></script>
+  <script src="vendor/leaflet-heat.js"></script>
+
+  <!-- Chart.js -->
+  <script src="vendor/chart.umd.min.js"></script>
+
+  <!-- App -->
+  <script src="incidents.js"></script>
+  <script src="apps.js"></script>
+  <script src="dashboard-ui.js"></script>
+  <script src="dashboard.js"></script>
+  <script src="dataset-analysis.js"></script>
+  <script src="traffic.js"></script>
+  <script src="local-server.js"></script>
+  <script src="vendor/hospital-map/background-switcher.js"></script>
+</body>
+
+</html>
